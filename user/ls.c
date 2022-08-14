@@ -67,7 +67,7 @@ ls(char *path)
     }
     break;
   }
-  close(fd);
+  
 }
 
 int
