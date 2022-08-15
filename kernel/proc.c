@@ -266,6 +266,8 @@ fork(void)
   if((np = allocproc()) == 0){
     return -1;
   }
+  // copy trace_mask
+  np->trace_mask = p->trace_mask;
 
   // Copy user memory from parent to child.
   if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
@@ -692,4 +694,25 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+uint64
+get_num_proc(void)
+{
+  // static char *states[] = {
+  // [UNUSED]    "unused",
+  // [SLEEPING]  "sleep ",
+  // [RUNNABLE]  "runble",
+  // [RUNNING]   "run   ",
+  // [ZOMBIE]    "zombie"
+  // };
+  struct proc *p;
+
+  int ans = 0;
+  for(p = proc; p < &proc[NPROC]; p++){
+    if(p->state != UNUSED)
+      ans += 1;
+    
+  }
+  return ans;
 }
