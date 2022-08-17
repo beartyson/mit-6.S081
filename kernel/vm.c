@@ -289,6 +289,46 @@ freewalk(pagetable_t pagetable)
   kfree((void*)pagetable);
 }
 
+// Recursively print page table entry
+void
+vmprint(pagetable_t pagetable)
+{
+  printf("page table %p\n", pagetable);
+
+  vmprint_stub(pagetable,0);
+}
+
+void vmprint_stub(pagetable_t pagetable,int level)
+{
+  for (int i = 0; i < 512; i++)
+  {
+    /* code */
+    pte_t pte = pagetable[i];
+    uint64 child = PTE2PA(pte);
+    if((pte & PTE_V)){
+      switch (level)
+      {
+      case 0:
+        /* code */
+        printf("..%d: pte %p pa %p\n",i,pte,child);
+        vmprint_stub((pagetable_t)child,level + 1);
+        break;
+      case 1:
+        printf(".. ..%d: pte %p pa %p\n",i,pte,child);
+        vmprint_stub((pagetable_t)child,level + 1);
+        break;
+      case 2:
+        printf(".. .. ..%d: pte %p pa %p\n",i,pte,child);
+        break;
+      default:
+        break;
+      }
+    }
+    
+  }
+  
+}
+
 // Free user memory pages,
 // then free page-table pages.
 void
