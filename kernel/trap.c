@@ -77,11 +77,25 @@ usertrap(void)
     exit(-1);
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2)
+  if(which_dev == 2) {
+    if(p->ticks != 0) { // 如果设定了时钟事件
+      if(--p->left <= 0) { // 时钟倒计时 -1 tick，如果已经到达或超过设定的 tick 数
+        if(!p->is_going) { // 确保没有时钟正在运行
+          p->left = p->ticks;
+          // jump to execute alarm_handler
+          *p->rep_frame = *p->trapframe;
+          // exchange(p->rep_frame,p->trapframe); // backup trapframe
+          p->trapframe->epc = (uint64)p->handler;
+          p->is_going = 1;
+        }
+        // 如果一个时钟到期的时候已经有一个时钟处理函数正在运行，则会推迟到原处理函数运行完成后的下一个 tick 才触发这次时钟
+      }
+    }
     yield();
-
+  }
   usertrapret();
 }
+
 
 //
 // return to user space
@@ -217,4 +231,42 @@ devintr()
     return 0;
   }
 }
-
+void exchange(struct trapframe *p1,struct trapframe *p2)
+{
+  p1->kernel_satp = p2->kernel_satp;   // kernel page table
+  p1->kernel_sp = p2->kernel_sp;     // top of process's kernel stack
+  p1->kernel_trap = p2->kernel_trap;   // usertrap()
+  p1->epc = p2->epc;           // saved user program counter
+  p1->kernel_hartid = p2->kernel_hartid; // saved kernel tp
+  p1->ra = p2->ra;
+  p1->sp = p2->sp;
+  p1->gp = p2->gp;
+  p1->tp = p2->tp;
+  p1->t0 = p2->t0;
+  p1->t1 = p2->t1;
+  p1->t2 = p2->t2;
+  p1->s0 = p2->s0;
+  p1->s1 = p2->s1;
+  p1->a0 = p2->a0;
+  p1->a1 = p2->a1;
+  p1->a2 = p2->a2;
+  p1->a3 = p2->a3;
+  p1->a4 = p2->a4;
+  // /* 152 */ uint64 a5;
+  // /* 160 */ uint64 a6;
+  // /* 168 */ uint64 a7;
+  // /* 176 */ uint64 s2;
+  // /* 184 */ uint64 s3;
+  // /* 192 */ uint64 s4;
+  // /* 200 */ uint64 s5;
+  // /* 208 */ uint64 s6;
+  // /* 216 */ uint64 s7;
+  // /* 224 */ uint64 s8;
+  // /* 232 */ uint64 s9;
+  // /* 240 */ uint64 s10;
+  // /* 248 */ uint64 s11;
+  // /* 256 */ uint64 t3;
+  // /* 264 */ uint64 t4;
+  // /* 272 */ uint64 t5;
+  // /* 280 */ uint64 t6;
+}
