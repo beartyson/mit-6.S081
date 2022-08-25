@@ -201,7 +201,7 @@ int shouldtouch(uint64 va){
   pte_t* pte;
   struct proc *p = myproc();
 
-  return va < p->sz && PGROUNDDOWN(va) != r_sp() && (((pte = walk(p->pagetable, va, 0))==0) || ((*pte & PTE_V)==0));
+  return va < p->sz && PGROUNDUP(va) != r_sp() && (((pte = walk(p->pagetable, va, 0))==0) || ((*pte & PTE_V)==0));
 }
 
 // create an empty user page table.
