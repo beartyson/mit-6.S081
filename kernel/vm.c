@@ -370,23 +370,40 @@ int
 copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 {
   uint64 n, va0, pa0;
-  if(shouldtouch(dstva))
+  // if(shouldtouch(dstva))
+  // {
+  //   struct proc *p = myproc();
+  //   uint64 mem;
+  //   // printf("page fault:%p\n",va);
+  //   dstva= PGROUNDDOWN(dstva);
+  //   mem = (uint64)kalloc();
+  //   if(mem == 0){
+  //     p->killed = 1;
+  //   }else{
+  //     memset((void*)mem,0,PGSIZE);
+  //     if(mappages(p->pagetable, dstva, PGSIZE, (uint64)mem, PTE_W|PTE_R|PTE_U|PTE_X) != 0){
+  //     kfree((void*)mem);
+  //     p->killed = 1;
+  //     }
+  //   }
+  // }
+  if(dstva >= MAXVA){
+    return -1;
+  }
+  pte_t* pte = walk(pagetable,dstva,0);
+  if(pte == 0 || (*pte & PTE_U) == 0 || (*pte & PTE_V) == 0 )
   {
-    struct proc *p = myproc();
-    uint64 mem;
-    // printf("page fault:%p\n",va);
-    dstva= PGROUNDDOWN(dstva);
-    mem = (uint64)kalloc();
-    if(mem == 0){
-      p->killed = 1;
-    }else{
-      memset((void*)mem,0,PGSIZE);
-      if(mappages(p->pagetable, dstva, PGSIZE, (uint64)mem, PTE_W|PTE_R|PTE_U|PTE_X) != 0){
-      kfree((void*)mem);
-      p->killed = 1;
-      }
+    return -1;
+  }
+
+  if((*pte & PTE_W) == 0){
+    if(cowfork(pagetable,dstva) < 0){
+      return -1;
     }
   }
+
+  pa0 = PTE2PA(*pte);
+
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
     pa0 = walkaddr(pagetable, va0);
@@ -411,23 +428,23 @@ int
 copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
 {
   uint64 n, va0, pa0;
-  if(shouldtouch(srcva))
-  {
-    struct proc *p = myproc();
-    uint64 mem;
-    // printf("page fault:%p\n",va);
-    srcva = PGROUNDDOWN(srcva);
-    mem = (uint64)kalloc();
-    if(mem == 0){
-      p->killed = 1;
-    }else{
-      memset((void*)mem,0,PGSIZE);
-      if(mappages(p->pagetable, srcva, PGSIZE, (uint64)mem, PTE_W|PTE_R|PTE_U|PTE_X) != 0){
-      kfree((void*)mem);
-      p->killed = 1;
-      }
-    }
-  }
+  // if(shouldtouch(srcva))
+  // {
+  //   struct proc *p = myproc();
+  //   uint64 mem;
+  //   // printf("page fault:%p\n",va);
+  //   srcva = PGROUNDDOWN(srcva);
+  //   mem = (uint64)kalloc();
+  //   if(mem == 0){
+  //     p->killed = 1;
+  //   }else{
+  //     memset((void*)mem,0,PGSIZE);
+  //     if(mappages(p->pagetable, srcva, PGSIZE, (uint64)mem, PTE_W|PTE_R|PTE_U|PTE_X) != 0){
+  //     kfree((void*)mem);
+  //     p->killed = 1;
+  //     }
+  //   }
+  // }
   while(len > 0 ){
     va0 = PGROUNDDOWN(srcva);
     pa0 = walkaddr(pagetable, va0);
