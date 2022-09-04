@@ -116,6 +116,7 @@ sys_fstat(void)
 }
 
 // Create the path new as a link to the same inode as old.
+// dirlink will create new in parent of new and write ip->num to it.
 uint64
 sys_link(void)
 {
@@ -304,17 +305,39 @@ sys_open(void)
       return -1;
     }
   } else {
-    if((ip = namei(path)) == 0){
-      end_op();
-      return -1;
+    int symlink_depth = 0;
+    while(1) { // recursively follow symlinks
+      if((ip = namei(path)) == 0){
+        end_op();
+        return -1;
+      }
+      ilock(ip);
+      if(ip->type == T_SYMLINK && (omode & O_NOFOLLOW) == 0) {
+        if(++symlink_depth > 10) {
+          // too many layer of symlinks, might be a loop
+          iunlockput(ip);
+          end_op();
+          return -1;
+        }
+        if(readi(ip, 0, (uint64)path, 0, MAXPATH) < 0) {
+          iunlockput(ip);
+          end_op();
+          return -1;
+        }
+        iunlockput(ip);
+      } else {
+        break;
+      }
     }
-    ilock(ip);
-    if(ip->type == T_DIR && omode != O_RDONLY){
+    
+    
+  }
+
+  if(ip->type == T_DIR && omode != O_RDONLY){
       iunlockput(ip);
       end_op();
       return -1;
     }
-  }
 
   if(ip->type == T_DEVICE && (ip->major < 0 || ip->major >= NDEV)){
     iunlockput(ip);
@@ -482,5 +505,40 @@ sys_pipe(void)
     fileclose(wf);
     return -1;
   }
+  return 0;
+}
+
+
+// symlink and link : in link, initialize an entry in dp, it points to the inode
+// for symlink, just initialize a new inode and put addr in it.
+// Symbolic links resembles hard links, but hard links are restricted to pointing to file on the same disk, while symbolic links can cross disk devices.
+// A hard link is a file all its own, and the file references or points to the exact spot on a hard drive where the Inode stores the data. 
+// A soft link isn't a separate file, it points to the name of the original file, rather than to a spot on the hard drive.
+
+// so just put name in it
+uint64
+sys_symlink(void)
+{
+  char target[MAXPATH],path[MAXPATH];
+  struct inode *ip;
+  if(argstr(0, target, MAXPATH) < 0 || argstr(1,path,MAXPATH) < 0)
+    return -1;
+  begin_op();
+
+  ip = create(path, T_SYMLINK, 0, 0);
+  if(ip == 0){
+    end_op();
+    return -1;
+  }
+
+  // this function puts src in the offset/BSIZE of data block of inode
+  if(writei(ip, 0, (uint64)target, 0, strlen(target)) < 0) {
+    end_op();
+    return -1;
+  }
+
+  iunlockput(ip);
+
+  end_op();
   return 0;
 }
