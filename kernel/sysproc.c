@@ -47,8 +47,9 @@ sys_sbrk(void)
   if(argint(0, &n) < 0)
     return -1;
   addr = myproc()->sz;
-  if(growproc(n) < 0)
-    return -1;
+  // if(growproc(n) < 0)
+  //   return -1;
+  myproc()->sz += n
   return addr;
 }
 
@@ -95,3 +96,14 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+uint64 sys_mmap(void)
+{
+  return -1;
+}
+
+uint64 sys_munmap(void)
+{
+  return -1;
+}
+
