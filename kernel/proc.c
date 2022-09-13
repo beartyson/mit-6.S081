@@ -6,6 +6,7 @@
 #include "proc.h"
 #include "defs.h"
 
+
 struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
@@ -128,6 +129,9 @@ found:
     return 0;
   }
 
+  for(int i=0;i<16;i++) {
+    p->vmas[i].valid = 0;
+  }
   // Set up new context to start executing at forkret,
   // which returns to user space.
   memset(&p->context, 0, sizeof(p->context));
@@ -148,6 +152,8 @@ freeproc(struct proc *p)
   p->trapframe = 0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
+
+
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
@@ -290,6 +296,14 @@ fork(void)
   // Cause fork to return 0 in the child.
   np->trapframe->a0 = 0;
 
+
+  for(i = 0; i < 16; i++) {
+    struct vma *v = &p->vmas[i];
+    if(v->valid) {
+      np->vmas[i] = *v;
+      filedup(v->outfile);
+    }
+  }
   // increment reference counts on open file descriptors.
   for(i = 0; i < NOFILE; i++)
     if(p->ofile[i])
@@ -351,6 +365,13 @@ exit(int status)
       fileclose(f);
       p->ofile[fd] = 0;
     }
+  }
+  for(int i = 0; i < 16; i++) {
+    struct vma *v = &p->vmas[i];
+    if(v->valid){
+      vmaunmap(p->pagetable, v->addr, v->sz, v);
+    }
+    
   }
 
   begin_op();

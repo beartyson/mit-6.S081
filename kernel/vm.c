@@ -5,6 +5,11 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
+#include "fcntl.h"
+#include "spinlock.h"
+#include "sleeplock.h"
+#include "file.h"
+#include "proc.h"
 
 /*
  * the kernel's page table.
@@ -427,5 +432,36 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
     return 0;
   } else {
     return -1;
+  }
+}
+
+void
+vmaunmap(pagetable_t pagetable, uint64 va, uint64 nbytes, struct vma *v)
+{
+  uint64 a;
+  pte_t *pte;
+
+  for(a = va; a < va + nbytes; a += PGSIZE){
+    if((pte = walk(pagetable, a, 0)) == 0)
+      panic("sys_munmap: walk");
+    if(PTE_FLAGS(*pte) == PTE_V)
+      panic("sys_munmap: not a leaf");
+    if(*pte & PTE_V){
+      uint64 pa = PTE2PA(*pte);
+      if((*pte & PTE_D) && (v->flag & MAP_SHARED)) { // dirty, need to write back to disk
+        begin_op();
+        ilock(v->outfile->ip);
+        uint64 aoff = a - v->addr; // offset relative to the start of memory range ,address in block starts from 0
+        if(aoff + PGSIZE > v->sz){  // if the last page is not a full 4k page
+          writei(v->outfile->ip, 0, pa, v->offset + aoff, v->sz - aoff);
+        } else { // full 4k pages
+          writei(v->outfile->ip, 0, pa, v->offset + aoff, PGSIZE);
+        }
+        iunlock(v->outfile->ip);
+        end_op();
+      }
+      kfree((void*)pa);
+      *pte = 0;
+    }
   }
 }

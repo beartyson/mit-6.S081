@@ -15,6 +15,9 @@
 #include "sleeplock.h"
 #include "file.h"
 #include "fcntl.h"
+#include "memlayout.h"
+
+struct vma* findvma(struct proc *p,uint64 va);
 
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
@@ -483,4 +486,162 @@ sys_pipe(void)
     return -1;
   }
   return 0;
+}
+
+uint64 sys_mmap(void)
+{
+  uint64 addr;
+  if(argaddr(0, &addr) < 0)
+    return -1;
+  int sz;
+  if(argint(1, &sz) < 0)
+    return -1;
+  int permission;
+  if(argint(2, &permission) < 0)
+    return -1;
+  int flag;
+  if(argint(3, &flag) < 0)
+    return -1;
+  int fd;
+  struct file *f;
+  if(argfd(4, &fd,&f) < 0)
+    return -1;
+  int offset;
+  if(argint(5, &offset) < 0)
+    return -1;
+
+  if((!f->readable && (permission & (PROT_READ)))
+    || (!f->writable && (permission & PROT_WRITE) && !(flag & MAP_PRIVATE)))
+  return -1;
+  
+  sz = PGROUNDUP(sz);
+
+  struct proc *p = myproc();
+  struct vma *v = 0;
+  uint64 vaend = MMAPEND; 
+
+  for (int i = 0; i < 16; i++)
+  {
+    /* code */
+    struct vma *vv = &p->vmas[i];
+    if(vv->valid == 0) {
+      if(v == 0) {
+        v = &p->vmas[i];
+        // found free vma;
+        v->valid = 1;
+      }
+    } else if(vv->addr < vaend) {
+      vaend = PGROUNDDOWN(vv->addr);
+    }
+
+  }
+
+  if(v == 0){
+    panic("no enough vma \n !");
+  }
+
+  v->addr = vaend-sz;
+  v->sz = sz;
+  v->flag = flag;
+  v->perimission = permission;
+  v->offset = offset;
+  v->outfile = f;
+
+  filedup(f);
+  
+  return v->addr;
+}
+
+uint64 sys_munmap(void)
+{
+
+  uint64 addr, sz;
+
+  if(argaddr(0, &addr) < 0 || argaddr(1, &sz) < 0 || sz == 0)
+    return -1;
+
+  struct proc *p = myproc();
+
+  struct vma *v = findvma(p, addr);
+
+  if(v == 0) {
+    return -1;
+  }
+
+  if(addr > v->addr && addr + sz < v->addr + v->sz) {
+    // trying to "dig a hole" inside the memory range.
+    return -1;
+  }
+
+  uint64 addr_aligned = addr;
+  if(addr > v->addr) {
+    addr_aligned = PGROUNDUP(addr);
+  }
+
+  int nunmap = sz - (addr_aligned-addr); // nbytes to unmap
+  if(nunmap < 0)
+    nunmap = 0;
+
+  vmaunmap(p->pagetable, addr_aligned, nunmap, v);
+
+  v->offset += addr + sz - v->addr;
+  v->addr = addr + sz;
+  
+  v->sz -= sz;
+
+  if(v->sz <= 0) {
+    fileclose(v->outfile);
+    v->valid = 0;
+  }
+  return 0;
+}
+
+
+struct vma* findvma(struct proc *p,uint64 va){
+
+  for (int i = 0; i < 16; i++)
+  {
+    /* code */
+    struct vma *vv = &p->vmas[i];
+    if(vv->valid == 1 && va >= vv->addr&& va < vv->addr + vv->sz) {
+      return vv;
+    }
+  }
+  return 0;
+}
+
+int vaallocate(uint64 va)
+{
+  struct proc *p = myproc();
+  struct vma* v = findvma(p,va);
+  if(v == 0) {
+    return 0;
+  }
+
+  void *pa = kalloc();
+  if(pa == 0) {
+    panic("vmalazytouch: kalloc");
+  }
+  memset(pa, 0, PGSIZE);
+
+  begin_op();
+  ilock(v->outfile->ip);
+  readi(v->outfile->ip, 0, (uint64)pa, v->offset + PGROUNDDOWN(va - v->addr), PGSIZE);  // just to align to pages
+  iunlock(v->outfile->ip);
+  end_op();
+
+
+  int perm = PTE_U;
+  if(v->perimission & PROT_READ)
+    perm |= PTE_R;
+  if(v->perimission & PROT_WRITE)
+    perm |= PTE_W;
+  if(v->perimission & PROT_EXEC)
+    perm |= PTE_X;
+
+  if(mappages(p->pagetable, va, PGSIZE, (uint64)pa, PTE_R | PTE_W | PTE_U) < 0) {
+    panic("vaallocate: mappages");
+  }
+
+  return 1;
 }

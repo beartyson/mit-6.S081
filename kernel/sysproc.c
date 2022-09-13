@@ -6,6 +6,8 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "proc.h"
+#include "fcntl.h"
+
 
 uint64
 sys_exit(void)
@@ -46,11 +48,9 @@ sys_sbrk(void)
 
   if(argint(0, &n) < 0)
     return -1;
-  
-  // if(growproc(n) < 0)
-  //   return -1;
-  myproc()->sz += n;
   addr = myproc()->sz;
+  if(growproc(n) < 0)
+    return -1;
   return addr;
 }
 
@@ -98,13 +98,4 @@ sys_uptime(void)
   return xticks;
 }
 
-uint64 sys_mmap(void)
-{
-  return -1;
-}
-
-uint64 sys_munmap(void)
-{
-  return -1;
-}
 

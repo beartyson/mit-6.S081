@@ -43,3 +43,24 @@ You will need a RISC-V "newlib" tool chain from
 https://github.com/riscv/riscv-gnu-toolchain, and qemu compiled for
 riscv64-softmmu. Once they are installed, and in your shell
 search path, you can run "make qemu".
+
+
+my thoughts on mmap:
+
+edited file:
+
+implement VMA, for each process , record file to be loaded and place this piece of info at top heap,
+so reduce possibility of collision,
+lazy allocate file only in page fault, allocate empty vma to it.
+since read date from block starting from zero offset. be aware that we just need addr of ip block and offset
+
+map in page table 
+doesn't matter what content u choose, pa and va match always.
+
+keypoint in unmmap, align with pg size, 
+cut whatever before startign pg because we want a pg intact or completely wiped off.
+
+using dirty bit to tell should we write it back or not.
+
+and we release mapped area in exit.
+
