@@ -363,7 +363,7 @@ void net_rx(struct mbuf *m)
     mbuffree(m);
     return;
   }
-
+  printf("receive one ... \n");
   type = ntohs(ethhdr->type);
   if (type == ETHTYPE_IP)
     net_rx_ip(m);
